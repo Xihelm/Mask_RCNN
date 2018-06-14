@@ -8,12 +8,15 @@ Written by Waleed Abdulla
 """
 
 import math
+
 import numpy as np
 
+from future.utils import iteritems
 
 # Base Configuration Class
 # Don't use this class directly. Instead, sub-class it and override
 # the configurations you need to change.
+
 
 class Config(object):
     """Base configuration class. For custom configurations, create a
@@ -34,6 +37,9 @@ class Config(object):
     # number that your GPU can handle for best performance.
     IMAGES_PER_GPU = 2
 
+    # OFF coco or imagnenet weights
+    WEIGHT_BASE_MODEL = 'coco'
+
     # Number of training steps per epoch
     # This doesn't need to match the size of the training set. Tensorboard
     # updates are saved at the end of each epoch, so setting this to a
@@ -42,6 +48,7 @@ class Config(object):
     # might take a while, so don't set this too small to avoid spending
     # a lot of time on validation stats.
     STEPS_PER_EPOCH = 1000
+    MAX_EPOCHS = 10000
 
     # Number of validation steps to run at the end of every training epoch.
     # A bigger number improves accuracy of validation stats, but slows
@@ -211,9 +218,11 @@ class Config(object):
 
         # Input image size
         if self.IMAGE_RESIZE_MODE == "crop":
-            self.IMAGE_SHAPE = np.array([self.IMAGE_MIN_DIM, self.IMAGE_MIN_DIM, 3])
+            self.IMAGE_SHAPE = np.array(
+                [self.IMAGE_MIN_DIM, self.IMAGE_MIN_DIM, 3])
         else:
-            self.IMAGE_SHAPE = np.array([self.IMAGE_MAX_DIM, self.IMAGE_MAX_DIM, 3])
+            self.IMAGE_SHAPE = np.array(
+                [self.IMAGE_MAX_DIM, self.IMAGE_MAX_DIM, 3])
 
         # Image meta data length
         # See compose_image_meta() for details
@@ -226,3 +235,29 @@ class Config(object):
             if not a.startswith("__") and not callable(getattr(self, a)):
                 print("{:30} {}".format(a, getattr(self, a)))
         print("\n")
+
+    def set_param(self, key, value):
+        if hasattr(self, key):
+            if key in [
+                    'MEAN_PIXEL', 'IMAGE_SHAPE', 'BBOX_STD_DEV',
+                    'RPN_BBOX_STD_DEV'
+            ] and not isinstance(value, np.ndarray):
+                value = np.array(value)
+            setattr(self, key, value)
+            print('Setting {} to {}'.format(key, value))
+        else:
+            print('{} is not a valid attribute of config'.format(key))
+
+    def to_dict(self):
+        out = dict()
+        for a in dir(self):
+            if not a.startswith("__") and not callable(getattr(self, a)):
+                if isinstance(getattr(self, a), np.ndarray):
+                    out[a] = list(getattr(self, a))
+                else:
+                    out[a] = getattr(self, a)
+        return out
+
+    def from_dict(self, config):
+        for key, value in iteritems(config):
+            self.set_param(key, value)

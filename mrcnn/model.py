@@ -34,9 +34,13 @@ from ai_platform.external.mrcnn import utils
 assert LooseVersion(tf.__version__) >= LooseVersion("1.3")
 assert LooseVersion(keras.__version__) >= LooseVersion('2.0.8')
 
+
 ############################################################
 #  Utility Functions
 ############################################################
+def fullmatch(regex, string, flags=0):
+    """Emulate python-3.4 re.fullmatch()."""
+    return re.match("(?:" + regex + r")\Z", string, flags=flags)
 
 
 def log(text, array=None):
@@ -1965,6 +1969,11 @@ class MaskRCNN():
         self.set_log_dir()
         self.keras_model = self.build(mode=mode, config=config)
 
+    def reset_model(self, mode, config):
+        self.mode = mode
+        self.config = config
+        self.keras_model = self.build(mode=mode, config=config)
+
     def build(self, mode, config):
         """Build Mask R-CNN architecture.
             input_shape: The shape of the input image.
@@ -2402,7 +2411,7 @@ class MaskRCNN():
             if not layer.weights:
                 continue
             # Is it trainable?
-            trainable = bool(re.fullmatch(layer_regex, layer.name))
+            trainable = bool(fullmatch(layer_regex, layer.name))
             # Update layer. If layer is a container, update inner layer.
             if layer.__class__.__name__ == 'TimeDistributed':
                 layer.layer.trainable = trainable
@@ -2455,7 +2464,72 @@ class MaskRCNN():
                                             "mask_rcnn_{}_*epoch*.h5".format(
                                                 self.config.NAME.lower()))
         self.checkpoint_path = self.checkpoint_path.replace(
-            "*epoch*", "{epoch:04d}")
+            "*epoch*", "{0:04d}".format(self.epoch))
+
+    def train_from_generator(self, train_generator, val_generator, layers):
+        """
+        Train directly from generator
+        """
+        assert self.mode == "training", "Create model in training mode."
+
+        # Pre-defined layer regular expressions
+        layer_regex = {
+            # all layers but the backbone
+            "heads":
+            r"(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)",
+            # From a specific Resnet stage and up
+            "3+":
+            r"(res3.*)|(bn3.*)|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)",
+            "4+":
+            r"(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)",
+            "5+":
+            r"(res5.*)|(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)",
+            # All layers
+            "all":
+            ".*",
+        }
+        if layers in layer_regex.keys():
+            layers = layer_regex[layers]
+
+        # Callbacks
+        callbacks = [
+            keras.callbacks.TensorBoard(
+                log_dir=self.log_dir,
+                histogram_freq=0,
+                write_graph=True,
+                write_images=False),
+            keras.callbacks.ModelCheckpoint(
+                self.checkpoint_path, verbose=0, save_weights_only=True),
+        ]
+
+        # Train
+        log("\nStarting at epoch {}. LR={}\n".format(
+            self.epoch, self.config.LEARNING_RATE))
+        log("Checkpoint Path: {}".format(self.checkpoint_path))
+        self.set_trainable(layers)
+        self.compile(self.config.LEARNING_RATE, self.config.LEARNING_MOMENTUM)
+
+        # Work-around for Windows: Keras fails on Windows when using
+        # multiprocessing workers. See discussion here:
+        # https://github.com/matterport/Mask_RCNN/issues/13#issuecomment-353124009
+        if os.name is 'nt':
+            workers = 0
+        else:
+            workers = multiprocessing.cpu_count()
+
+        self.keras_model.fit_generator(
+            train_generator,
+            initial_epoch=self.epoch,
+            epochs=self.config.MAX_EPOCHS,
+            steps_per_epoch=self.config.STEPS_PER_EPOCH,
+            callbacks=callbacks,
+            validation_data=val_generator,
+            validation_steps=self.config.VALIDATION_STEPS,
+            max_queue_size=100,
+            workers=workers,
+            use_multiprocessing=True,
+        )
+        self.epoch = max(self.epoch, self.config.MAX_EPOCHS)
 
     def train(self,
               train_dataset,
@@ -2833,7 +2907,7 @@ class MaskRCNN():
         for p in parents:
             if p in checked:
                 continue
-            if bool(re.fullmatch(name, p.name)):
+            if bool(fullmatch(name, p.name)):
                 return p
             checked.append(p)
             a = self.ancestor(p, name, checked)
