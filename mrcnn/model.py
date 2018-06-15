@@ -1966,7 +1966,6 @@ class MaskRCNN():
         self.mode = mode
         self.config = config
         self.model_dir = model_dir
-        self.set_log_dir()
         self.keras_model = self.build(mode=mode, config=config)
 
     def reset_model(self, mode, config):
@@ -2317,9 +2316,6 @@ class MaskRCNN():
         if hasattr(f, 'close'):
             f.close()
 
-        # Update the log directory
-        self.set_log_dir(filepath)
-
     def get_imagenet_weights(self):
         """Downloads ImageNet trained weights from Keras.
         Returns path to weights file.
@@ -2422,7 +2418,7 @@ class MaskRCNN():
                 log("{}{:20}   ({})".format(" " * indent, layer.name,
                                             layer.__class__.__name__))
 
-    def set_log_dir(self, model_path=None):
+    def set_log_dir(self):
         """Sets the model log directory and epoch counter.
         model_path: If None, or a format different from what this code uses
             then set a new log directory and start epochs from 0. Otherwise,
@@ -2441,13 +2437,12 @@ class MaskRCNN():
             os.makedirs(self.log_dir)
 
         # Path to save after each epoch. Include placeholders that get filled by Keras.
-        self.checkpoint_path = os.path.join(self.model_dir,
-                                            "mask_rcnn_{}_*epoch*.h5".format(
-                                                self.config.NAME.lower()))
-        self.checkpoint_path = self.checkpoint_path.replace(
-            "*epoch*", "{epoch:04d}")
+        checkpoint = '%s_{epoch:02d}-{%s:.7f}.hdf5' % (
+            self.config.NAME.lower(), 'val_loss')
+        self.checkpoint_path = os.path.join(self.model_dir, checkpoint)
 
-    def train_from_generator(self, train_generator, val_generator, layers):
+    def train_from_generator(self, train_generator, val_generator, layers,
+                             callbacks):
         """
         Train directly from generator
         """
@@ -2472,21 +2467,9 @@ class MaskRCNN():
         if layers in layer_regex.keys():
             layers = layer_regex[layers]
 
-        # Callbacks
-        callbacks = [
-            keras.callbacks.TensorBoard(
-                log_dir=self.log_dir,
-                histogram_freq=0,
-                write_graph=True,
-                write_images=False),
-            keras.callbacks.ModelCheckpoint(
-                self.checkpoint_path, verbose=0, save_weights_only=True),
-        ]
-
         # Train
         log("\nStarting at epoch {}. LR={}\n".format(
             self.epoch, self.config.LEARNING_RATE))
-        log("Checkpoint Path: {}".format(self.checkpoint_path))
         self.set_trainable(layers)
         self.compile(self.config.LEARNING_RATE, self.config.LEARNING_MOMENTUM)
 
@@ -2727,6 +2710,82 @@ class MaskRCNN():
             if full_masks else np.empty(original_image_shape[:2] + (0,))
 
         return boxes, class_ids, scores, full_masks
+
+    def load_image(self, image_path):
+        """Load the specified image and return a [H,W,3] Numpy array.
+        """
+        # Load image
+        image = skimage.io.imread(image_path)
+        # If grayscale. Convert to RGB for consistency.
+        if image.ndim != 3:
+            image = skimage.color.gray2rgb(image)
+        # If has an alpha channel, remove it for consistency
+        if image.shape[-1] == 4:
+            image = image[..., :3]
+        return image
+
+    def detect_from_paths(self, image_ids, image_paths, verbose=0):
+        """Runs the detection pipeline.
+
+        images: List of images, potentially of different sizes.
+
+        Returns a list of dicts, one dict per image. The dict contains:
+        rois: [N, (y1, x1, y2, x2)] detection bounding boxes
+        class_ids: [N] int class IDs
+        scores: [N] float probability scores for the class IDs
+        masks: [H, W, N] instance binary masks
+        """
+        assert self.mode == "inference", "Create model in inference mode."
+        assert len(
+            image_ids
+        ) == self.config.BATCH_SIZE, "len(images) must be equal to BATCH_SIZE"
+
+        images = [self.load_image(img_path) for img_path in image_paths]
+        if verbose:
+            log("Processing {} images".format(len(images)))
+            for image in images:
+                log("image", image)
+
+        # Mold inputs to format expected by the neural network
+        molded_images, image_metas, windows = self.mold_inputs(images)
+
+        # Validate image sizes
+        # All images in a batch MUST be of the same size
+        image_shape = molded_images[0].shape
+        for g in molded_images[1:]:
+            assert g.shape == image_shape,\
+                "After resizing, all images must have the same size. Check IMAGE_RESIZE_MODE and image sizes."
+
+        # Anchors
+        anchors = self.get_anchors(image_shape)
+        # Duplicate across the batch dimension because Keras requires it
+        # TODO: can this be optimized to avoid duplicating the anchors?
+        anchors = np.broadcast_to(anchors,
+                                  (self.config.BATCH_SIZE, ) + anchors.shape)
+
+        if verbose:
+            log("molded_images", molded_images)
+            log("image_metas", image_metas)
+            log("anchors", anchors)
+        # Run object detection
+        detections, _, _, mrcnn_mask, _, _, _ =\
+            self.keras_model.predict([molded_images, image_metas, anchors], verbose=0)
+        # Process detections
+        results = []
+        for i, image in enumerate(images):
+            final_rois, final_class_ids, final_scores, final_masks =\
+                self.unmold_detections(detections[i], mrcnn_mask[i],
+                                       image.shape, molded_images[i].shape,
+                                       windows[i])
+            results.append({
+                "rois": final_rois,
+                "class_ids": final_class_ids,
+                "scores": final_scores,
+                "masks": final_masks,
+                "image_path": image_paths[i],
+                "image_id": image_ids[i]
+            })
+        return results
 
     def detect(self, images, verbose=0):
         """Runs the detection pipeline.
