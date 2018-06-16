@@ -18,7 +18,36 @@ from future.utils import iteritems
 # the configurations you need to change.
 
 
-class Config(object):
+class ConfigMixin(object):
+    def set_param(self, **kwargs):
+        for key, value in kwargs.iteritems():
+            if hasattr(self, key):
+                if key in [
+                        'MEAN_PIXEL', 'IMAGE_SHAPE', 'BBOX_STD_DEV',
+                        'RPN_BBOX_STD_DEV'
+                ] and not isinstance(value, np.ndarray):
+                    value = np.array(value)
+                setattr(self, key, value)
+                print('Setting {} to {}'.format(key, value))
+            else:
+                print('{} is not a valid attribute of config'.format(key))
+        self.__init__()
+
+    def to_dict(self):
+        out = dict()
+        for a in dir(self):
+            if not a.startswith("__") and not callable(getattr(self, a)):
+                if isinstance(getattr(self, a), np.ndarray):
+                    out[a] = list(getattr(self, a))
+                else:
+                    out[a] = getattr(self, a)
+        return out
+
+    def from_dict(self, config):
+        self.set_param(**config)
+
+
+class Config(ConfigMixin):
     """Base configuration class. For custom configurations, create a
     sub-class that inherits from this one and override properties
     that need to be changed.
@@ -238,30 +267,3 @@ class Config(object):
             if not a.startswith("__") and not callable(getattr(self, a)):
                 print("{:30} {}".format(a, getattr(self, a)))
         print("\n")
-
-    def set_param(self, **kwargs):
-        for key, value in kwargs.iteritems():
-            if hasattr(self, key):
-                if key in [
-                        'MEAN_PIXEL', 'IMAGE_SHAPE', 'BBOX_STD_DEV',
-                        'RPN_BBOX_STD_DEV'
-                ] and not isinstance(value, np.ndarray):
-                    value = np.array(value)
-                setattr(self, key, value)
-                print('Setting {} to {}'.format(key, value))
-            else:
-                print('{} is not a valid attribute of config'.format(key))
-        self.__init__()
-
-    def to_dict(self):
-        out = dict()
-        for a in dir(self):
-            if not a.startswith("__") and not callable(getattr(self, a)):
-                if isinstance(getattr(self, a), np.ndarray):
-                    out[a] = list(getattr(self, a))
-                else:
-                    out[a] = getattr(self, a)
-        return out
-
-    def from_dict(self, config):
-        self.set_param(**config)
