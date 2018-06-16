@@ -31,6 +31,9 @@ class Config(object):
     # NUMBER OF GPUs to use. For CPU training, use 1
     GPU_COUNT = 1
 
+    # EITEHR TO USE augmentation
+    AUGMENTATION = True
+
     # Number of images to train with on each GPU. A 12GB GPU can typically
     # handle 2 images of 1024x1024px.
     # Adjust based on your GPU memory and image sizes. Use the highest
@@ -236,17 +239,19 @@ class Config(object):
                 print("{:30} {}".format(a, getattr(self, a)))
         print("\n")
 
-    def set_param(self, key, value):
-        if hasattr(self, key):
-            if key in [
-                    'MEAN_PIXEL', 'IMAGE_SHAPE', 'BBOX_STD_DEV',
-                    'RPN_BBOX_STD_DEV'
-            ] and not isinstance(value, np.ndarray):
-                value = np.array(value)
-            setattr(self, key, value)
-            print('Setting {} to {}'.format(key, value))
-        else:
-            print('{} is not a valid attribute of config'.format(key))
+    def set_param(self, **kwargs):
+        for key, value in kwargs.iteritems():
+            if hasattr(self, key):
+                if key in [
+                        'MEAN_PIXEL', 'IMAGE_SHAPE', 'BBOX_STD_DEV',
+                        'RPN_BBOX_STD_DEV'
+                ] and not isinstance(value, np.ndarray):
+                    value = np.array(value)
+                setattr(self, key, value)
+                print('Setting {} to {}'.format(key, value))
+            else:
+                print('{} is not a valid attribute of config'.format(key))
+        self.__init__()
 
     def to_dict(self):
         out = dict()
@@ -259,5 +264,4 @@ class Config(object):
         return out
 
     def from_dict(self, config):
-        for key, value in iteritems(config):
-            self.set_param(key, value)
+        self.set_param(**config)

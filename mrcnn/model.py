@@ -2442,7 +2442,7 @@ class MaskRCNN():
         self.checkpoint_path = os.path.join(self.model_dir, checkpoint)
 
     def train_from_generator(self, train_generator, val_generator, layers,
-                             callbacks):
+                             learning_rate, epochs, callbacks):
         """
         Train directly from generator
         """
@@ -2468,10 +2468,10 @@ class MaskRCNN():
             layers = layer_regex[layers]
 
         # Train
-        log("\nStarting at epoch {}. LR={}\n".format(
-            self.epoch, self.config.LEARNING_RATE))
+        log("\nStarting at epoch {}. LR={}\n".format(self.epoch,
+                                                     learning_rate))
         self.set_trainable(layers)
-        self.compile(self.config.LEARNING_RATE, self.config.LEARNING_MOMENTUM)
+        self.compile(learning_rate, self.config.LEARNING_MOMENTUM)
 
         # Work-around for Windows: Keras fails on Windows when using
         # multiprocessing workers. See discussion here:
@@ -2484,7 +2484,7 @@ class MaskRCNN():
         self.keras_model.fit_generator(
             train_generator,
             initial_epoch=self.epoch,
-            epochs=self.config.MAX_EPOCHS,
+            epochs=epochs,
             steps_per_epoch=self.config.STEPS_PER_EPOCH,
             callbacks=callbacks,
             validation_data=val_generator,
@@ -2493,7 +2493,7 @@ class MaskRCNN():
             workers=workers,
             use_multiprocessing=True,
         )
-        self.epoch = max(self.epoch, self.config.MAX_EPOCHS)
+        self.epoch = max(self.epoch, epochs)
 
     def train(self,
               train_dataset,
