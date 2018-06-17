@@ -2451,7 +2451,7 @@ class MaskRCNN():
             val_generator: Iterator for val set
             layers : layer to train in here
             learning_rate: Learning rate for this specific training phase
-            epochs: Nb of epochs to train for this particular training phase
+            epochs: Abs nb of epochs. if self.epoch not null, will start fron there
             callbacks: Set of keras callbacks.
 
         """
@@ -2477,9 +2477,8 @@ class MaskRCNN():
             layers = layer_regex[layers]
 
         # Train
-        epochs = self.epoch + epochs
-        log("\nStarting at epoch {} for {}. LR={}\n".format(
-            self.epoch, epochs, learning_rate))
+        log("\nStarting at epoch {}. LR={}\n".format(self.epoch,
+                                                     learning_rate))
         self.set_trainable(layers)
         self.compile(learning_rate, self.config.LEARNING_MOMENTUM)
 
