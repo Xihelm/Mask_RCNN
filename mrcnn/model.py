@@ -2445,6 +2445,15 @@ class MaskRCNN():
                              learning_rate, epochs, callbacks):
         """
         Train directly from generator
+
+        Args:
+            train_generator : Iterator for training set
+            val_generator: Iterator for val set
+            layers : layer to train in here
+            learning_rate: Learning rate for this specific training phase
+            epochs: Nb of epochs to train for this particular training phase
+            callbacks: Set of keras callbacks.
+
         """
         assert self.mode == "training", "Create model in training mode."
 
@@ -2468,8 +2477,9 @@ class MaskRCNN():
             layers = layer_regex[layers]
 
         # Train
-        log("\nStarting at epoch {}. LR={}\n".format(self.epoch,
-                                                     learning_rate))
+        epochs = self.epoch + epochs
+        log("\nStarting at epoch {} for {}. LR={}\n".format(
+            self.epoch, epochs, learning_rate))
         self.set_trainable(layers)
         self.compile(learning_rate, self.config.LEARNING_MOMENTUM)
 
