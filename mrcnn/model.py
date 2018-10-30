@@ -20,13 +20,12 @@ from collections import OrderedDict
 # Requires TensorFlow 1.3+ and Keras 2.0.8+.
 from distutils.version import LooseVersion
 
-import numpy as np
-
 import keras
 import keras.backend as K
 import keras.engine as KE
 import keras.layers as KL
 import keras.models as KM
+import numpy as np
 import skimage.transform
 import tensorflow as tf
 from ai_platform.external.mrcnn import utils
@@ -1289,8 +1288,8 @@ def mrcnn_mask_loss_graph(target_masks, target_class_ids, pred_masks):
     # Compute binary cross entropy. If no positive ROIs, then return 0.
     # shape: [batch, roi, num_classes]
     loss = K.switch(
-        tf.size(y_true) > 0,
-        K.binary_crossentropy(target=y_true, output=y_pred), tf.constant(0.0))
+        tf.size(y_true) > 0, K.binary_crossentropy(
+            target=y_true, output=y_pred), tf.constant(0.0))
     loss = K.mean(loss)
     return loss
 
@@ -1715,10 +1714,10 @@ def generate_random_rois(image_shape, count, gt_class_ids, gt_boxes):
             x1x2 = np.random.randint(r_x1, r_x2, (rois_per_box * 2, 2))
             # Filter out zero area boxes
             threshold = 1
-            y1y2 = y1y2[np.abs(y1y2[:, 0] - y1y2[:, 1]) >=
-                        threshold][:rois_per_box]
-            x1x2 = x1x2[np.abs(x1x2[:, 0] - x1x2[:, 1]) >=
-                        threshold][:rois_per_box]
+            y1y2 = y1y2[
+                np.abs(y1y2[:, 0] - y1y2[:, 1]) >= threshold][:rois_per_box]
+            x1x2 = x1x2[
+                np.abs(x1x2[:, 0] - x1x2[:, 1]) >= threshold][:rois_per_box]
             if y1y2.shape[0] == rois_per_box and x1x2.shape[0] == rois_per_box:
                 break
 
@@ -1739,10 +1738,10 @@ def generate_random_rois(image_shape, count, gt_class_ids, gt_boxes):
         x1x2 = np.random.randint(0, image_shape[1], (remaining_count * 2, 2))
         # Filter out zero area boxes
         threshold = 1
-        y1y2 = y1y2[np.abs(y1y2[:, 0] - y1y2[:, 1]) >=
-                    threshold][:remaining_count]
-        x1x2 = x1x2[np.abs(x1x2[:, 0] - x1x2[:, 1]) >=
-                    threshold][:remaining_count]
+        y1y2 = y1y2[
+            np.abs(y1y2[:, 0] - y1y2[:, 1]) >= threshold][:remaining_count]
+        x1x2 = x1x2[
+            np.abs(x1x2[:, 0] - x1x2[:, 1]) >= threshold][:remaining_count]
         if y1y2.shape[0] == remaining_count and x1x2.shape[0] == remaining_count:
             break
 
@@ -2429,8 +2428,8 @@ class MaskRCNN():
         self.epoch = 0
 
         # Directory for training logs
-        self.log_dir = os.path.join(self.model_dir, '{}_tensorboard'.format(
-            self.config.NAME.lower()))
+        self.log_dir = os.path.join(
+            self.model_dir, '{}_tensorboard'.format(self.config.NAME.lower()))
 
         # Create log_dir if not exists
         if not os.path.exists(self.log_dir):
@@ -2638,11 +2637,9 @@ class MaskRCNN():
                 mode=self.config.IMAGE_RESIZE_MODE)
             molded_image = mold_image(molded_image, self.config)
             # Build image_meta
-            image_meta = compose_image_meta(0, image.shape, molded_image.shape,
-                                            window, scale,
-                                            np.zeros(
-                                                [self.config.NUM_CLASSES],
-                                                dtype=np.int32))
+            image_meta = compose_image_meta(
+                0, image.shape, molded_image.shape, window, scale,
+                np.zeros([self.config.NUM_CLASSES], dtype=np.int32))
             # Append
             molded_images.append(molded_image)
             windows.append(window)
@@ -2699,8 +2696,8 @@ class MaskRCNN():
 
         # Filter out detections with zero area. Happens in early training when
         # network weights are still random
-        exclude_ix = np.where(
-            (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) <= 0)[0]
+        exclude_ix = np.where((boxes[:, 2] - boxes[:, 0]) *
+                              (boxes[:, 3] - boxes[:, 1]) <= 0)[0]
         if exclude_ix.shape[0] > 0:
             boxes = np.delete(boxes, exclude_ix, axis=0)
             class_ids = np.delete(class_ids, exclude_ix, axis=0)
@@ -3034,8 +3031,8 @@ class MaskRCNN():
         outputs_np = kf(model_in)
 
         # Pack the generated Numpy arrays into a a dict and log the results.
-        outputs_np = OrderedDict([(k, v)
-                                  for k, v in zip(outputs.keys(), outputs_np)])
+        outputs_np = OrderedDict(
+            [(k, v) for k, v in zip(outputs.keys(), outputs_np)])
         for k, v in outputs_np.items():
             log(k, v)
         return outputs_np
@@ -3060,14 +3057,14 @@ def compose_image_meta(image_id, original_image_shape, image_shape, window,
         the image came. Useful if training on images from multiple datasets
         where not all classes are present in all datasets.
     """
-    meta = np.array([image_id] +  # size=1
-                    list(original_image_shape) +  # size=3
-                    list(image_shape) +  # size=3
-                    list(window)
-                    +  # size=4 (y1, x1, y2, x2) in image cooredinates
-                    [scale] +  # size=1
-                    list(active_class_ids)  # size=num_classes
-                    )
+    meta = np.array(
+        [image_id] +  # size=1
+        list(original_image_shape) +  # size=3
+        list(image_shape) +  # size=3
+        list(window) +  # size=4 (y1, x1, y2, x2) in image cooredinates
+        [scale] +  # size=1
+        list(active_class_ids)  # size=num_classes
+    )
     return meta
 
 

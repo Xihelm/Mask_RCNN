@@ -10,44 +10,13 @@ Written by Waleed Abdulla
 import math
 
 import numpy as np
-
 from future.utils import iteritems
+
 
 # Base Configuration Class
 # Don't use this class directly. Instead, sub-class it and override
 # the configurations you need to change.
-
-
-class ConfigMixin(object):
-    def set_param(self, **kwargs):
-        for key, value in kwargs.iteritems():
-            if hasattr(self, key):
-                if key in [
-                        'MEAN_PIXEL', 'IMAGE_SHAPE', 'BBOX_STD_DEV',
-                        'RPN_BBOX_STD_DEV'
-                ] and not isinstance(value, np.ndarray):
-                    value = np.array(value)
-                setattr(self, key, value)
-                print('Setting {} to {}'.format(key, value))
-            else:
-                print('{} is not a valid attribute of config'.format(key))
-        self.__init__()
-
-    def to_dict(self):
-        out = dict()
-        for a in dir(self):
-            if not a.startswith("__") and not callable(getattr(self, a)):
-                if isinstance(getattr(self, a), np.ndarray):
-                    out[a] = list(getattr(self, a))
-                else:
-                    out[a] = getattr(self, a)
-        return out
-
-    def from_dict(self, config):
-        self.set_param(**config)
-
-
-class Config(ConfigMixin):
+class Config(object):
     """Base configuration class. For custom configurations, create a
     sub-class that inherits from this one and override properties
     that need to be changed.
@@ -81,6 +50,7 @@ class Config(ConfigMixin):
     # a lot of time on validation stats.
     STEPS_PER_EPOCH = 1000
     MAX_EPOCHS = 10000
+    PATIENCE = 50
 
     # Number of validation steps to run at the end of every training epoch.
     # A bigger number improves accuracy of validation stats, but slows
@@ -267,3 +237,37 @@ class Config(ConfigMixin):
             if not a.startswith("__") and not callable(getattr(self, a)):
                 print("{:30} {}".format(a, getattr(self, a)))
         print("\n")
+
+    def set_param(self, **kwargs):
+        for key, value in kwargs.iteritems():
+            if hasattr(self, key):
+                if key in [
+                        'MEAN_PIXEL', 'IMAGE_SHAPE', 'BBOX_STD_DEV',
+                        'RPN_BBOX_STD_DEV'
+                ] and not isinstance(value, np.ndarray):
+                    value = np.array(value)
+                elif key in ['MINI_MASK_SHAPE', 'RPN_ANCHOR_SCALES']:
+                    value = tuple(value)
+                setattr(self, key, value)
+                print('Setting {} to {}'.format(key, value))
+            else:
+                print('{} is not a valid attribute of config'.format(key))
+        self.__init__()
+
+    def to_dict(self):
+        out = dict()
+        for a in dir(self):
+            if not a.startswith("__") and not callable(getattr(self, a)):
+                if isinstance(getattr(self, a), np.ndarray):
+                    if a == 'IMAGE_SHAPE':
+                        out[a] = [int(f) for f in getattr(self, a)]
+                    else:
+                        out[a] = [float(f) for f in getattr(self, a)]
+                elif isinstance(getattr(self, a), tuple):
+                    out[a] = list(getattr(self, a))
+                else:
+                    out[a] = getattr(self, a)
+        return out
+
+    def from_dict(self, config):
+        self.set_param(**config)
