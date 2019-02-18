@@ -249,7 +249,6 @@ class Config(object):
                 elif key in ['MINI_MASK_SHAPE', 'RPN_ANCHOR_SCALES']:
                     value = tuple(value)
                 setattr(self, key, value)
-                print('Setting {} to {}'.format(key, value))
             else:
                 print('{} is not a valid attribute of config'.format(key))
         self.__init__()

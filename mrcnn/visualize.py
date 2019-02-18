@@ -16,13 +16,13 @@ import os
 import random
 import sys
 
+import IPython.display
+
 import matplotlib.pyplot as plt
 import numpy as np
+from ai_platform.external.mrcnn import utils
 from matplotlib import lines, patches
 from matplotlib.patches import Polygon
-
-import IPython.display
-from ai_platform.external.mrcnn import utils
 from skimage.measure import find_contours
 
 # Root directory of the project
@@ -81,9 +81,9 @@ def apply_mask(image, mask, color, alpha=0.5):
     """Apply the given mask to the image.
     """
     for c in range(3):
-        image[:, :, c] = np.where(mask == 1, image[:, :, c] *
-                                  (1 - alpha) + alpha * color[c] * 255,
-                                  image[:, :, c])
+        image[:, :, c] = np.where(
+            mask == 1, image[:, :, c] * (1 - alpha) + alpha * color[c] * 255,
+            image[:, :, c])
     return image
 
 
@@ -187,6 +187,7 @@ def display_instances(image,
     ax.imshow(masked_image.astype(np.uint8))
     if auto_show:
         plt.show()
+    return masked_image.astype(np.uint8)
 
 
 def display_differences(image,
@@ -357,8 +358,7 @@ def display_top_masks(image, mask, class_ids, class_names, limit=4):
         for i in unique_class_ids
     ]
     top_ids = [
-        v[0]
-        for v in sorted(
+        v[0] for v in sorted(
             zip(unique_class_ids, mask_area), key=lambda r: r[1], reverse=True)
         if v[1] > 0
     ]
