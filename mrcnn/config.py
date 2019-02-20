@@ -52,6 +52,10 @@ class Config(object):
     MAX_EPOCHS = 10000
     PATIENCE = 50
 
+    # TRAINING SCHEDULE - IF SET - overwride MAX_EPOCHS
+    # Pass a list of list [[regexp,lr,nepochs],[regexp,lr,nepochs],...]
+    TRAINING_SCHEDULE = None
+
     # Number of validation steps to run at the end of every training epoch.
     # A bigger number improves accuracy of validation stats, but slows
     # down the training.
